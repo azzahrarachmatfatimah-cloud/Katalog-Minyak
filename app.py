@@ -38,7 +38,7 @@ for item in data_minyak:
 
     # Tombol WhatsApp
     pesan_wa = f"Hello, I am interested in buying {item['nama']} ({item['harga']}). Is it available?"
-    link_wa = f"https://wa.me/6281234567890?text={pesan_wa.replace(' ', '%20')}"
+    link_wa = f"https://wa.me/6285147158294?text={pesan_wa.replace(' ', '%20')}"
 
     st.markdown(f"[💬 **Inquire / Buy via WhatsApp**]({link_wa})")
     st.markdown("---")
