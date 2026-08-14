@@ -1,9 +1,23 @@
 import streamlit as st
+from supabase import create_client
 
 # 1. Konfigurasi Halaman Web
 st.set_page_config(page_title="Essential Oil Marketplace", page_icon="🌿", layout="wide")
 
-# 2. DICTIONARY TRANSLASI (Bahasa Inggris & Indonesia)
+# 2. Inisialisasi Koneksi Supabase Database
+@st.cache_resource
+def init_supabase():
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error("⚠️ Database connection failed. Please check your .streamlit/secrets.toml file.")
+        return None
+
+supabase = init_supabase()
+
+# 3. DICTIONARY TRANSLASI (Multi-Language UI)
 TEXTS = {
     "English": {
         "title": "🌿 Premium Essential Oils & Spices Catalogue",
@@ -17,7 +31,7 @@ TEXTS = {
         "send_wa": "💬 Send Order via WhatsApp",
         "clear_cart": "🗑️ Clear Cart",
         "products_title": "📦 Products",
-        "no_products": "No products found matching your search/filter.",
+        "no_products": "No products found in database matching your search/filter.",
         "category": "Category:",
         "price": "Price:",
         "status": "Status:",
@@ -36,9 +50,9 @@ TEXTS = {
         "benefits_id_label": "Benefits (Indonesia):",
         "usage_en_label": "Usage (English):",
         "usage_id_label": "Usage (Indonesia):",
-        "save_btn": "💾 Save Product",
-        "save_success": "New product successfully added to catalogue!",
-        "fill_all_error": "Please fill in all product details!"
+        "save_btn": "💾 Save Product to Supabase Cloud",
+        "save_success": "✅ Product successfully saved permanently in Supabase Database!",
+        "fill_all_error": "⚠️ Please fill in all required product fields!"
     },
     "Bahasa Indonesia": {
         "title": "🌿 Katalog Minyak Rempah & Atsiri Premium",
@@ -52,7 +66,7 @@ TEXTS = {
         "send_wa": "💬 Kirim Pesanan via WhatsApp",
         "clear_cart": "🗑️ Kosongkan Keranjang",
         "products_title": "📦 Daftar Produk",
-        "no_products": "Tidak ada produk yang cocok dengan pencarian Anda.",
+        "no_products": "Tidak ada produk di database yang cocok dengan pencarian Anda.",
         "category": "Kategori:",
         "price": "Harga:",
         "status": "Status:",
@@ -71,92 +85,49 @@ TEXTS = {
         "benefits_id_label": "Manfaat (Indonesia):",
         "usage_en_label": "Cara Pakai (Inggris):",
         "usage_id_label": "Cara Pakai (Indonesia):",
-        "save_btn": "💾 Simpan Produk",
-        "save_success": "Produk baru berhasil ditambahkan ke katalog!",
-        "fill_all_error": "Harap isi semua informasi produk!"
+        "save_btn": "💾 Simpan Produk ke Cloud Supabase",
+        "save_success": "✅ Produk baru berhasil tersimpan permanen di Database Supabase!",
+        "fill_all_error": "⚠️ Harap isi semua kolom informasi produk!"
     }
 }
 
-# 3. SIDEBAR: Pilihan Bahasa & Filter
+# 4. SIDEBAR: Pilihan Bahasa & Filter
 st.sidebar.header("⚙️ Settings / Pengaturan")
 bahasa = st.sidebar.selectbox("🌐 Language / Bahasa", ["English", "Bahasa Indonesia"])
 t = TEXTS[bahasa]
 
-# 4. Inisialisasi Session State (Database Produk & Keranjang)
-if "katalog_minyak" not in st.session_state:
-    st.session_state["katalog_minyak"] = [
-        {
-            "id": 1,
-            "nama_en": "Pure Clove Essential Oil (Minyak Cengkeh)",
-            "nama_id": "Minyak Atsiri Cengkeh Murni",
-            "kategori": "Essential Oil",
-            "harga": 12.0,
-            "ukuran": "50ml",
-            "stok": "In Stock",
-            "manfaat_en": "Relieves toothache, natural antiseptic, warm & soothing aroma.",
-            "manfaat_id": "Meringankan sakit gigi, antiseptik alami, aroma hangat & menenangkan.",
-            "pemakaian_en": "Diffuse 3-5 drops or mix with carrier oil for massage.",
-            "pemakaian_id": "Teteskan 3-5 tetes ke diffuser atau campur dengan carrier oil untuk pijat."
-        },
-        {
-            "id": 2,
-            "nama_en": "Citronella Grass Oil (Minyak Serai Wangi)",
-            "nama_id": "Minyak Serai Wangi Alami",
-            "kategori": "Essential Oil",
-            "harga": 8.5,
-            "ukuran": "100ml",
-            "stok": "In Stock",
-            "manfaat_en": "Natural insect repellent, stress relief, fresh citrus scent.",
-            "manfaat_id": "Penolak nyamuk alami, meredakan stres, aroma sitrus yang segar.",
-            "pemakaian_en": "Mix with water for room spray or use in aromatherapy diffuser.",
-            "pemakaian_id": "Campur dengan air untuk semprotan ruangan atau gunakan di diffuser."
-        },
-        {
-            "id": 3,
-            "nama_en": "Nutmeg Essential Oil (Minyak Pala)",
-            "nama_id": "Minyak Atsiri Pala Premium",
-            "kategori": "Spice Extract",
-            "harga": 15.0,
-            "ukuran": "30ml",
-            "stok": "Limited",
-            "manfaat_en": "Muscle relaxation, improves sleep quality, warm spicy blend.",
-            "manfaat_id": "Relaksasi otot, meningkatkan kualitas tidur, aroma rempah hangat.",
-            "pemakaian_en": "Add 2-3 drops to warm bath water or diffuse at bedtime.",
-            "pemakaian_id": "Teteskan 2-3 tetes ke air mandi hangat atau gunakan diffuser sebelum tidur."
-        },
-        {
-            "id": 4,
-            "nama_en": "Patchouli Natural Oil (Minyak Nilam)",
-            "nama_id": "Minyak Nilam Murni (Patchouli)",
-            "kategori": "Essential Oil",
-            "harga": 20.0,
-            "ukuran": "50ml",
-            "stok": "In Stock",
-            "manfaat_en": "Skin grounding, long-lasting earthy perfume, anti-aging properties.",
-            "manfaat_id": "Menutrisi kulit, aroma parfum tanah yang tahan lama, kaya antioksidan.",
-            "pemakaian_en": "Apply diluted to skin or use in perfumery blends.",
-            "pemakaian_id": "Oleskan secara terencerkan ke kulit atau gunakan sebagai bahan dasar parfum."
-        }
-    ]
-
+# 5. Inisialisasi Session State Keranjang
 if "keranjang" not in st.session_state:
     st.session_state["keranjang"] = []
 
-# 5. Header Utama Dinamis Sesuai Bahasa
+# 6. MENGAMBIL DATA DARI SUPABASE (READ DATABASE)
+def load_products_from_supabase():
+    if supabase is None:
+        return []
+    try:
+        response = supabase.table("katalog_minyak").select("*").execute()
+        return response.data
+    except Exception as e:
+        st.error(f"Error fetching data from Supabase: {e}")
+        return []
+
+katalog_db = load_products_from_supabase()
+
+# Header Utama
 st.title(t["title"])
 st.write(t["subtitle"])
 st.markdown("---")
 
-# 6. SIDEBAR: Search & Filter Dinamis
+# 7. SIDEBAR: Search & Filter Dinamis
 st.sidebar.header("🔍 " + t["search_label"].replace(":", ""))
 kata_kunci = st.sidebar.text_input(t["search_label"])
 
-kategori_list = [t["all_categories"]] + sorted(list(set(item["kategori"] for item in st.session_state["katalog_minyak"])))
+kategori_list = [t["all_categories"]] + sorted(list(set(item["kategori"] for item in katalog_db))) if katalog_db else [t["all_categories"]]
 kategori_pilihan = st.sidebar.selectbox(t["category_label"], kategori_list)
 
 st.sidebar.markdown("---")
 
-# SIDEBAR: Keranjang Belanja Dinamis
+# SIDEBAR: Keranjang Belanja
 st.sidebar.header(t["cart_title"])
 cart_count = len(st.session_state["keranjang"])
 st.sidebar.write(f"{t['cart_items']} **{cart_count}**")
@@ -164,16 +135,16 @@ st.sidebar.write(f"{t['cart_items']} **{cart_count}**")
 if cart_count > 0:
     total_harga = 0.0
     st.sidebar.write("---")
-    for idx, cart_item in enumerate(st.session_state["keranjang"]):
+    for cart_item in st.session_state["keranjang"]:
         nama_produk_cart = cart_item["nama_en"] if bahasa == "English" else cart_item["nama_id"]
         st.sidebar.write(f"• **{nama_produk_cart}**")
         st.sidebar.write(f"  _${cart_item['harga']} / {cart_item['ukuran']}_")
-        total_harga += cart_item['harga']
+        total_harga += float(cart_item['harga'])
     
     st.sidebar.markdown("---")
     st.sidebar.subheader(f"{t['total']} `${total_harga:.2f}`")
     
-    # Rekap WA
+    # Rekap Pesanan WA
     daftar_item_str = "%0A".join([
         f"- {item['nama_en'] if bahasa == 'English' else item['nama_id']} (${item['harga']})" 
         for item in st.session_state['keranjang']
@@ -188,13 +159,12 @@ if cart_count > 0:
         st.session_state["keranjang"] = []
         st.rerun()
 
-# 7. TAB NAVIGASI: KATALOG vs PANEL PENJUAL
+# 8. TAB NAVIGASI: KATALOG vs PANEL PENJUAL
 tab1, tab2 = st.tabs([f"🛍️ {t['products_title']}", f"⚙️ {t['add_product_title']}"])
 
-# ================= TAB 1: KATALOG PRODUK =================
+# ================= TAB 1: KATALOG PRODUK (PEMBELI) =================
 with tab1:
-    # FILTERING DATA KATALOG
-    produk_ditampilkan = st.session_state["katalog_minyak"]
+    produk_ditampilkan = katalog_db
 
     if kategori_pilihan != t["all_categories"]:
         produk_ditampilkan = [p for p in produk_ditampilkan if p["kategori"] == kategori_pilihan]
@@ -220,7 +190,7 @@ with tab1:
             with target_col:
                 st.markdown(f"### {nama_p}")
                 st.write(f"🏷️ **{t['category']}** {item['kategori']}")
-                st.write(f"💵 **{t['price']}** `${item['harga']:.2f}` / {item['ukuran']} | 📦 **{t['status']}** `{item['stok']}`")
+                st.write(f"💵 **{t['price']}** `${float(item['harga']):.2f}` / {item['ukuran']} | 📦 **{t['status']}** `{item['stok']}`")
                 
                 with st.expander(t["view_details"]):
                     st.write(f"✨ **{t['benefits']}** {manfaat_p}")
@@ -233,11 +203,11 @@ with tab1:
                     
                 st.markdown("---")
 
-# ================= TAB 2: FORM TAMBAH PRODUK BARU =================
+# ================= TAB 2: PANEL PENJUAL (SIMPAN KE SUPABASE) =================
 with tab2:
     st.subheader(t["add_product_title"])
     
-    with st.form("form_tambah_minyak"):
+    with st.form("form_tambah_minyak_supabase"):
         col_a, col_b = st.columns(2)
         
         with col_a:
@@ -258,9 +228,8 @@ with tab2:
         
         if submit_button:
             if nama_en_input and nama_id_input and manfaat_en_input and manfaat_id_input:
-                new_id = len(st.session_state["katalog_minyak"]) + 1
-                new_product = {
-                    "id": new_id,
+                # Payload data untuk Supabase Table
+                new_product_payload = {
                     "nama_en": nama_en_input,
                     "nama_id": nama_id_input,
                     "kategori": kategori_input,
@@ -273,8 +242,15 @@ with tab2:
                     "pemakaian_id": usage_id_input
                 }
                 
-                st.session_state["katalog_minyak"].append(new_product)
-                st.success(t["save_success"])
-                st.rerun()
+                # EXECUTE INSERT TO SUPABASE DATABASE
+                try:
+                    if supabase:
+                        supabase.table("katalog_minyak").insert(new_product_payload).execute()
+                        st.success(t["save_success"])
+                        st.rerun()
+                    else:
+                        st.error("Database connection missing!")
+                except Exception as err:
+                    st.error(f"Failed to save to database: {err}")
             else:
                 st.error(t["fill_all_error"])
