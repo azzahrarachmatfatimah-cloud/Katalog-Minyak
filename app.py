@@ -4,7 +4,7 @@ from supabase import create_client
 # 1. Konfigurasi Halaman Web
 st.set_page_config(page_title="Essential Oil Marketplace", page_icon="🌿", layout="wide")
 
-# 2. Inisialisasi Supabase
+# 2. Inisialisasi Supabase Database & Auth
 @st.cache_resource
 def init_supabase():
     try:
@@ -17,25 +17,29 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# 3. Inisialisasi Session State Akun
+# 3. Inisialisasi Session State Akun (Menyimpan Status Login)
 if "user" not in st.session_state:
     st.session_state["user"] = None
 if "profile" not in st.session_state:
     st.session_state["profile"] = None
 
-# -------------------------------------------------------------------
-# HELPER FUNCTIONS AUTH & PROFILE
-# -------------------------------------------------------------------
+# --- Helper Functions ---
 def get_user_profile(user_id):
-    res = supabase.table("profiles").select("*").eq("id", user_id).execute()
-    return res.data[0] if res.data else None
+    try:
+        res = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        return res.data[0] if res.data else None
+    except Exception:
+        return None
 
 def check_seller_verification(user_id):
-    res = supabase.table("seller_verifications").select("*").eq("user_id", user_id).execute()
-    return res.data[0] if res.data else None
+    try:
+        res = supabase.table("seller_verifications").select("*").eq("user_id", user_id).execute()
+        return res.data[0] if res.data else None
+    except Exception:
+        return None
 
 # -------------------------------------------------------------------
-# SIDEBAR: MODUL AUTENTIKASI (LOGIN / REGISTER / AKUN)
+# SIDEBAR: MODUL AUTENTIKASI (LOGIN / REGISTER / LOGOUT)
 # -------------------------------------------------------------------
 st.sidebar.title("🔐 Akun & Autentikasi")
 
@@ -44,26 +48,27 @@ if st.session_state["user"] is None:
     
     if auth_mode == "Daftar (Register)":
         st.sidebar.subheader("Buat Akun Baru")
-        reg_email = st.sidebar.text_input("Email")
-        reg_name = st.sidebar.text_input("Nama Lengkap")
-        reg_password = st.sidebar.text_input("Password", type="password")
-        reg_role = st.sidebar.selectbox("Daftar Sebagai:", ["Pembeli (Buyer)", "Penjual (Seller)"])
+        reg_email = st.sidebar.text_input("Email", key="reg_email")
+        reg_name = st.sidebar.text_input("Nama Lengkap", key="reg_name")
+        reg_password = st.sidebar.text_input("Password", type="password", key="reg_pass")
+        reg_role = st.sidebar.selectbox("Daftar Sebagai:", ["Pembeli (Buyer)", "Penjual (Seller)"], key="reg_role")
         
-        if st.sidebar.button("Daftar Akun"):
+        if st.sidebar.button("Daftar Akun", key="btn_reg"):
             if reg_email and reg_password and reg_name:
                 try:
                     role_value = "seller" if "Penjual" in reg_role else "buyer"
-                    # Register ke Supabase Auth
+                    # 1. Register ke Supabase Auth
                     res = supabase.auth.sign_up({"email": reg_email, "password": reg_password})
+                    
                     if res.user:
-                        # Simpan ke tabel profiles
+                        # 2. Simpan profil pengguna ke tabel profiles
                         supabase.table("profiles").insert({
                             "id": res.user.id,
                             "email": reg_email,
                             "full_name": reg_name,
                             "role": role_value
                         }).execute()
-                        st.sidebar.success("✅ Pendaftaran berhasil! Silakan Login.")
+                        st.sidebar.success("✅ Pendaftaran berhasil! Silakan pindah ke menu 'Masuk (Login)'.")
                 except Exception as e:
                     st.sidebar.error(f"Gagal daftar: {e}")
             else:
@@ -71,10 +76,10 @@ if st.session_state["user"] is None:
 
     elif auth_mode == "Masuk (Login)":
         st.sidebar.subheader("Login Akun")
-        login_email = st.sidebar.text_input("Email")
-        login_password = st.sidebar.text_input("Password", type="password")
+        login_email = st.sidebar.text_input("Email", key="log_email")
+        login_password = st.sidebar.text_input("Password", type="password", key="log_pass")
         
-        if st.sidebar.button("Masuk"):
+        if st.sidebar.button("Masuk", key="btn_log"):
             if login_email and login_password:
                 try:
                     res = supabase.auth.sign_in_with_password({"email": login_email, "password": login_password})
@@ -90,35 +95,41 @@ if st.session_state["user"] is None:
                 st.sidebar.warning("Masukkan Email dan Password.")
 
 else:
-    # Tampilan Jika Pengguna Sudah Login
+    # Tampilan Sesi Pengguna Aktif
     profile = st.session_state["profile"]
-    st.sidebar.markdown(f"**Selamat datang,**\n### {profile['full_name']}")
-    st.sidebar.info(f"🎭 Peran: **{profile['role'].upper()}**")
+    full_name = profile["full_name"] if profile else "Pengguna"
+    role_name = profile["role"].upper() if profile else "GUEST"
     
-    if st.sidebar.button("🚪 Keluar (Logout)"):
+    st.sidebar.markdown(f"**Selamat datang,**\n### {full_name}")
+    st.sidebar.info(f"🎭 Peran: **{role_name}**")
+    
+    if st.sidebar.button("🚪 Keluar (Logout)", key="btn_logout"):
         supabase.auth.sign_out()
         st.session_state["user"] = None
         st.session_state["profile"] = None
         st.rerun()
 
 # -------------------------------------------------------------------
-# HALAMAN UTAMA APLIKASI
+# HALAMAN UTAMA APLIKASI MARKETPLACE
 # -------------------------------------------------------------------
 st.title("🌿 Premium Essential Oils Marketplace")
 
-# Navigasi Tab Sesuai Hak Akses
 user_role = st.session_state["profile"]["role"] if st.session_state["profile"] else "guest"
 
+# Penyesuaian Tab Berdasarkan Peran (Role)
 if user_role == "seller":
     tab_katalog, tab_seller, tab_verifikasi = st.tabs(["🛍️ Katalog Produk", "⚙️ Panel Penjual", "📜 Verifikasi Kantor Usaha"])
 else:
     tab_katalog, = st.tabs(["🛍️ Katalog Produk"])
 
-# TAB 1: KATALOG PRODUK (Dapat diakses semua pengguna)
+# 1. TAB KATALOG PRODUK (Pembeli & Penjual)
 with tab_katalog:
     st.subheader("📦 Katalog Minyak Atsiri")
-    res = supabase.table("katalog_minyak").select("*").execute()
-    data_produk = res.data if res.data else []
+    try:
+        res_prod = supabase.table("katalog_minyak").select("*").execute()
+        data_produk = res_prod.data if res_prod.data else []
+    except Exception:
+        data_produk = []
     
     if not data_produk:
         st.info("Belum ada produk di katalog.")
@@ -132,12 +143,12 @@ with tab_katalog:
                 with st.expander("Manfaat & Detail"):
                     st.write(item.get("manfaat_id", "-"))
 
-# TAB 2 & 3: KHUSUS PENJUAL (SELLER)
+# 2. TAB KHUSUS PENJUAL (SELLER)
 if user_role == "seller":
     user_id = st.session_state["user"].id
     verification = check_seller_verification(user_id)
 
-    # TAB VERIFIKASI USAHA
+    # TAB VERIFIKASI KANTOR USAHA
     with tab_verifikasi:
         st.subheader("🏢 Verifikasi Identitas Kantor & Legalitas Penjual")
         
@@ -150,9 +161,9 @@ if user_role == "seller":
                 "Nomor Izin Usaha (NIB/SIUP)": verification["business_license_no"]
             })
         else:
-            st.warning("⚠️ Akun Anda belum terverifikasi. Lengkapi formulir legalitas di bawah untuk dapat mengunggah produk.")
+            st.warning("⚠️ Akun Anda belum terverifikasi. Lengkapi formulir legalitas usaha di bawah agar dapat menambah produk.")
             with st.form("form_verifikasi"):
-                comp_name = st.text_input("Nama Perusahaan / Perusahaan Perorangan")
+                comp_name = st.text_input("Nama Perusahaan / Usaha")
                 npwp_no = st.text_input("Nomor NPWP Badan / Perorangan")
                 address = st.text_area("Alamat Lengkap Kantor / Tempat Usaha")
                 license_no = st.text_input("Nomor Izin Berusaha (NIB / SIUP)")
@@ -166,18 +177,18 @@ if user_role == "seller":
                             "npwp": npwp_no,
                             "office_address": address,
                             "business_license_no": license_no,
-                            "status": "verified"  # Otomatis verified untuk mode latihan
+                            "status": "verified"
                         }).execute()
-                        st.success("✅ Dokumen berhasil dikirim dan diverifikasi!")
+                        st.success("✅ Dokumen berhasil dikirim dan terverifikasi!")
                         st.rerun()
                     else:
                         st.error("Mohon lengkapi semua kolom persyaratan.")
 
-    # TAB PANEL PENJUAL
+    # TAB PANEL PENJUAL (TAMBAH PRODUK)
     with tab_seller:
         st.subheader("➕ Tambah Produk Baru")
         if not verification or verification.get("status") != "verified":
-            st.error("🔒 Fitur Tambah Produk terkunci. Anda harus menyelesaikan **Verifikasi Kantor Usaha** terlebih dahulu.")
+            st.error("🔒 Fitur Tambah Produk terkunci. Anda harus menyelesaikan **Verifikasi Kantor Usaha** terlebih dahulu di tab sebelah.")
         else:
             with st.form("form_tambah_produk"):
                 p_name_en = st.text_input("Nama Produk (English)")
