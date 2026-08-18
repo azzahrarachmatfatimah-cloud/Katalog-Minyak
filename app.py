@@ -52,8 +52,8 @@ def get_all_sellers():
 # SCENARIO 1: TAMPILAN HALAMAN LOGIN & REGISTER (JIKA BELUM LOGIN)
 # ===================================================================
 if st.session_state["user"] is None:
-    st.markdown("<h1 style='text-align: center;'>🌿 Premium Essential Oils</h1>", unsafe_allow_dict=True)
-    st.markdown("<p style='text-align: center; color: gray;'>Silakan masuk atau daftar akun untuk mengakses marketplace</p>", unsafe_allow_dict=True)
+    st.markdown("<h1 style='text-align: center;'>🌿 Premium Essential Oils</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>Silakan masuk atau daftar akun untuk mengakses marketplace</p>", unsafe_allow_html=True)
     st.divider()
 
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -281,12 +281,12 @@ else:
                             target_wa = seller_phone.replace("+", "").replace(" ", "").replace("-", "")
                             wa_url = f"https://wa.me/{target_wa}?text={encoded_msg}"
                             st.success("✅ Pesanan berhasil dibuat!")
-                            st.markdown(f"[👉 **Klik Di Sini untuk Mengirim Pesanan via WhatsApp ke {selected_seller_name}**]({wa_url})", unsafe_allow_dict=True)
+                            st.markdown(f"[👉 **Klik Di Sini untuk Mengirim Pesanan via WhatsApp ke {selected_seller_name}**]({wa_url})", unsafe_allow_html=True)
                             
                         elif checkout_platform == "Telegram Direct Order":
                             tg_url = f"https://t.me/share/url?url=&text={encoded_msg}"
                             st.success("✅ Pesanan berhasil dibuat!")
-                            st.markdown(f"[👉 **Klik Di Sini untuk Mengirim Pesanan via Telegram**]({tg_url})", unsafe_allow_dict=True)
+                            st.markdown(f"[👉 **Klik Di Sini untuk Mengirim Pesanan via Telegram**]({tg_url})", unsafe_allow_html=True)
                             
                         elif checkout_platform == "Email Order Format":
                             st.code(message_template, language="text")
