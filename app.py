@@ -4,7 +4,7 @@ from supabase import create_client
 # 1. Konfigurasi Halaman Web
 st.set_page_config(page_title="Essential Oil Marketplace", page_icon="🌿", layout="wide")
 
-# 2. Inisialisasi Koneksi Supabase Database
+# 2. Inisialisasi Supabase
 @st.cache_resource
 def init_supabase():
     try:
@@ -12,245 +12,193 @@ def init_supabase():
         key = st.secrets["SUPABASE_KEY"]
         return create_client(url, key)
     except Exception as e:
-        st.error("⚠️ Database connection failed. Please check your .streamlit/secrets.toml file.")
+        st.error("⚠️ Koneksi database gagal. Cek konfigurasi secrets.")
         return None
 
 supabase = init_supabase()
 
-# 3. DICTIONARY TRANSLASI (Multi-Language UI)
-TEXTS = {
-    "English": {
-        "title": "🌿 Premium Essential Oils & Spices Catalogue",
-        "subtitle": "Discover authentic Indonesian essential oils. Select your items and order via WhatsApp!",
-        "search_label": "Search Product:",
-        "category_label": "Category Filter:",
-        "all_categories": "All Categories",
-        "cart_title": "🛒 Shopping Cart",
-        "cart_items": "Items in Cart:",
-        "total": "Total:",
-        "send_wa": "💬 Send Order via WhatsApp",
-        "clear_cart": "🗑️ Clear Cart",
-        "products_title": "📦 Products",
-        "no_products": "No products found in database matching your search/filter.",
-        "category": "Category:",
-        "price": "Price:",
-        "status": "Status:",
-        "view_details": "📖 View Benefits & Usage",
-        "benefits": "Benefits:",
-        "usage": "How to Use:",
-        "add_to_cart": "🛒 Add to Cart",
-        "added_success": "Added to cart!",
-        "add_product_title": "➕ Seller Panel: Add New Product",
-        "name_en_label": "Product Name (English):",
-        "name_id_label": "Product Name (Indonesia):",
-        "category_input_label": "Category:",
-        "price_label": "Price ($):",
-        "size_label": "Size (e.g. 50ml):",
-        "benefits_en_label": "Benefits (English):",
-        "benefits_id_label": "Benefits (Indonesia):",
-        "usage_en_label": "Usage (English):",
-        "usage_id_label": "Usage (Indonesia):",
-        "save_btn": "💾 Save Product to Supabase Cloud",
-        "save_success": "✅ Product successfully saved permanently in Supabase Database!",
-        "fill_all_error": "⚠️ Please fill in all required product fields!"
-    },
-    "Bahasa Indonesia": {
-        "title": "🌿 Katalog Minyak Rempah & Atsiri Premium",
-        "subtitle": "Temukan minyak atsiri asli Indonesia. Pilih produk dan pesan langsung via WhatsApp!",
-        "search_label": "Cari Produk:",
-        "category_label": "Filter Kategori:",
-        "all_categories": "Semua Kategori",
-        "cart_title": "🛒 Keranjang Belanja",
-        "cart_items": "Jumlah Barang:",
-        "total": "Total Harga:",
-        "send_wa": "💬 Kirim Pesanan via WhatsApp",
-        "clear_cart": "🗑️ Kosongkan Keranjang",
-        "products_title": "📦 Daftar Produk",
-        "no_products": "Tidak ada produk di database yang cocok dengan pencarian Anda.",
-        "category": "Kategori:",
-        "price": "Harga:",
-        "status": "Status:",
-        "view_details": "📖 Lihat Manfaat & Cara Pakai",
-        "benefits": "Manfaat:",
-        "usage": "Cara Penggunaan:",
-        "add_to_cart": "🛒 Tambah ke Keranjang",
-        "added_success": "Berhasil ditambahkan ke keranjang!",
-        "add_product_title": "➕ Panel Penjual: Tambah Produk Baru",
-        "name_en_label": "Nama Produk (Inggris):",
-        "name_id_label": "Nama Produk (Indonesia):",
-        "category_input_label": "Kategori:",
-        "price_label": "Harga ($):",
-        "size_label": "Ukuran (misal: 50ml):",
-        "benefits_en_label": "Manfaat (Inggris):",
-        "benefits_id_label": "Manfaat (Indonesia):",
-        "usage_en_label": "Cara Pakai (Inggris):",
-        "usage_id_label": "Cara Pakai (Indonesia):",
-        "save_btn": "💾 Simpan Produk ke Cloud Supabase",
-        "save_success": "✅ Produk baru berhasil tersimpan permanen di Database Supabase!",
-        "fill_all_error": "⚠️ Harap isi semua kolom informasi produk!"
-    }
-}
+# 3. Inisialisasi Session State Akun
+if "user" not in st.session_state:
+    st.session_state["user"] = None
+if "profile" not in st.session_state:
+    st.session_state["profile"] = None
 
-# 4. SIDEBAR: Pilihan Bahasa & Filter
-st.sidebar.header("⚙️ Settings / Pengaturan")
-bahasa = st.sidebar.selectbox("🌐 Language / Bahasa", ["English", "Bahasa Indonesia"])
-t = TEXTS[bahasa]
+# -------------------------------------------------------------------
+# HELPER FUNCTIONS AUTH & PROFILE
+# -------------------------------------------------------------------
+def get_user_profile(user_id):
+    res = supabase.table("profiles").select("*").eq("id", user_id).execute()
+    return res.data[0] if res.data else None
 
-# 5. Inisialisasi Session State Keranjang
-if "keranjang" not in st.session_state:
-    st.session_state["keranjang"] = []
+def check_seller_verification(user_id):
+    res = supabase.table("seller_verifications").select("*").eq("user_id", user_id).execute()
+    return res.data[0] if res.data else None
 
-# 6. MENGAMBIL DATA DARI SUPABASE (READ DATABASE)
-def load_products_from_supabase():
-    if supabase is None:
-        return []
-    try:
-        response = supabase.table("katalog_minyak").select("*").execute()
-        return response.data
-    except Exception as e:
-        st.error(f"Error fetching data from Supabase: {e}")
-        return []
+# -------------------------------------------------------------------
+# SIDEBAR: MODUL AUTENTIKASI (LOGIN / REGISTER / AKUN)
+# -------------------------------------------------------------------
+st.sidebar.title("🔐 Akun & Autentikasi")
 
-katalog_db = load_products_from_supabase()
-
-# Header Utama
-st.title(t["title"])
-st.write(t["subtitle"])
-st.markdown("---")
-
-# 7. SIDEBAR: Search & Filter Dinamis
-st.sidebar.header("🔍 " + t["search_label"].replace(":", ""))
-kata_kunci = st.sidebar.text_input(t["search_label"])
-
-kategori_list = [t["all_categories"]] + sorted(list(set(item["kategori"] for item in katalog_db))) if katalog_db else [t["all_categories"]]
-kategori_pilihan = st.sidebar.selectbox(t["category_label"], kategori_list)
-
-st.sidebar.markdown("---")
-
-# SIDEBAR: Keranjang Belanja
-st.sidebar.header(t["cart_title"])
-cart_count = len(st.session_state["keranjang"])
-st.sidebar.write(f"{t['cart_items']} **{cart_count}**")
-
-if cart_count > 0:
-    total_harga = 0.0
-    st.sidebar.write("---")
-    for cart_item in st.session_state["keranjang"]:
-        nama_produk_cart = cart_item["nama_en"] if bahasa == "English" else cart_item["nama_id"]
-        st.sidebar.write(f"• **{nama_produk_cart}**")
-        st.sidebar.write(f"  _${cart_item['harga']} / {cart_item['ukuran']}_")
-        total_harga += float(cart_item['harga'])
+if st.session_state["user"] is None:
+    auth_mode = st.sidebar.radio("Pilih Akses:", ["Masuk (Login)", "Daftar (Register)"])
     
-    st.sidebar.markdown("---")
-    st.sidebar.subheader(f"{t['total']} `${total_harga:.2f}`")
+    if auth_mode == "Daftar (Register)":
+        st.sidebar.subheader("Buat Akun Baru")
+        reg_email = st.sidebar.text_input("Email")
+        reg_name = st.sidebar.text_input("Nama Lengkap")
+        reg_password = st.sidebar.text_input("Password", type="password")
+        reg_role = st.sidebar.selectbox("Daftar Sebagai:", ["Pembeli (Buyer)", "Penjual (Seller)"])
+        
+        if st.sidebar.button("Daftar Akun"):
+            if reg_email and reg_password and reg_name:
+                try:
+                    role_value = "seller" if "Penjual" in reg_role else "buyer"
+                    # Register ke Supabase Auth
+                    res = supabase.auth.sign_up({"email": reg_email, "password": reg_password})
+                    if res.user:
+                        # Simpan ke tabel profiles
+                        supabase.table("profiles").insert({
+                            "id": res.user.id,
+                            "email": reg_email,
+                            "full_name": reg_name,
+                            "role": role_value
+                        }).execute()
+                        st.sidebar.success("✅ Pendaftaran berhasil! Silakan Login.")
+                except Exception as e:
+                    st.sidebar.error(f"Gagal daftar: {e}")
+            else:
+                st.sidebar.warning("Isi semua kolom pendaftaran.")
+
+    elif auth_mode == "Masuk (Login)":
+        st.sidebar.subheader("Login Akun")
+        login_email = st.sidebar.text_input("Email")
+        login_password = st.sidebar.text_input("Password", type="password")
+        
+        if st.sidebar.button("Masuk"):
+            if login_email and login_password:
+                try:
+                    res = supabase.auth.sign_in_with_password({"email": login_email, "password": login_password})
+                    if res.user:
+                        profile = get_user_profile(res.user.id)
+                        st.session_state["user"] = res.user
+                        st.session_state["profile"] = profile
+                        st.sidebar.success("✅ Login berhasil!")
+                        st.rerun()
+                except Exception as e:
+                    st.sidebar.error("Email atau Password salah.")
+            else:
+                st.sidebar.warning("Masukkan Email dan Password.")
+
+else:
+    # Tampilan Jika Pengguna Sudah Login
+    profile = st.session_state["profile"]
+    st.sidebar.markdown(f"**Selamat datang,**\n### {profile['full_name']}")
+    st.sidebar.info(f"🎭 Peran: **{profile['role'].upper()}**")
     
-    # Rekap Pesanan WA
-    daftar_item_str = "%0A".join([
-        f"- {item['nama_en'] if bahasa == 'English' else item['nama_id']} (${item['harga']})" 
-        for item in st.session_state['keranjang']
-    ])
-    pesan_wa = f"Hello,%20I%20would%20like%20to%20order:%0A{daftar_item_str}%0A%0ATotal:%20${total_harga:.2f}"
-    nomor_wa = "6281234567890" 
-    link_wa = f"https://wa.me/{nomor_wa}?text={pesan_wa}"
-    
-    st.sidebar.markdown(f"[{t['send_wa']}]({link_wa})")
-    
-    if st.sidebar.button(t["clear_cart"]):
-        st.session_state["keranjang"] = []
+    if st.sidebar.button("🚪 Keluar (Logout)"):
+        supabase.auth.sign_out()
+        st.session_state["user"] = None
+        st.session_state["profile"] = None
         st.rerun()
 
-# 8. TAB NAVIGASI: KATALOG vs PANEL PENJUAL
-tab1, tab2 = st.tabs([f"🛍️ {t['products_title']}", f"⚙️ {t['add_product_title']}"])
+# -------------------------------------------------------------------
+# HALAMAN UTAMA APLIKASI
+# -------------------------------------------------------------------
+st.title("🌿 Premium Essential Oils Marketplace")
 
-# ================= TAB 1: KATALOG PRODUK (PEMBELI) =================
-with tab1:
-    produk_ditampilkan = katalog_db
+# Navigasi Tab Sesuai Hak Akses
+user_role = st.session_state["profile"]["role"] if st.session_state["profile"] else "guest"
 
-    if kategori_pilihan != t["all_categories"]:
-        produk_ditampilkan = [p for p in produk_ditampilkan if p["kategori"] == kategori_pilihan]
+if user_role == "seller":
+    tab_katalog, tab_seller, tab_verifikasi = st.tabs(["🛍️ Katalog Produk", "⚙️ Panel Penjual", "📜 Verifikasi Kantor Usaha"])
+else:
+    tab_katalog, = st.tabs(["🛍️ Katalog Produk"])
 
-    if kata_kunci:
-        produk_ditampilkan = [
-            p for p in produk_ditampilkan 
-            if kata_kunci.lower() in p["nama_en"].lower() or kata_kunci.lower() in p["nama_id"].lower()
-        ]
-
-    if not produk_ditampilkan:
-        st.warning(t["no_products"])
-    else:
-        col1, col2 = st.columns(2)
-        
-        for idx, item in enumerate(produk_ditampilkan):
-            target_col = col1 if idx % 2 == 0 else col2
-            
-            nama_p = item["nama_en"] if bahasa == "English" else item["nama_id"]
-            manfaat_p = item["manfaat_en"] if bahasa == "English" else item["manfaat_id"]
-            pemakaian_p = item["pemakaian_en"] if bahasa == "English" else item["pemakaian_id"]
-            
-            with target_col:
-                st.markdown(f"### {nama_p}")
-                st.write(f"🏷️ **{t['category']}** {item['kategori']}")
-                st.write(f"💵 **{t['price']}** `${float(item['harga']):.2f}` / {item['ukuran']} | 📦 **{t['status']}** `{item['stok']}`")
-                
-                with st.expander(t["view_details"]):
-                    st.write(f"✨ **{t['benefits']}** {manfaat_p}")
-                    st.write(f"💡 **{t['usage']}** {pemakaian_p}")
-                
-                if st.button(t["add_to_cart"], key=f"add_{item['id']}"):
-                    st.session_state["keranjang"].append(item)
-                    st.success(t["added_success"])
-                    st.rerun()
-                    
-                st.markdown("---")
-
-# ================= TAB 2: PANEL PENJUAL (SIMPAN KE SUPABASE) =================
-with tab2:
-    st.subheader(t["add_product_title"])
+# TAB 1: KATALOG PRODUK (Dapat diakses semua pengguna)
+with tab_katalog:
+    st.subheader("📦 Katalog Minyak Atsiri")
+    res = supabase.table("katalog_minyak").select("*").execute()
+    data_produk = res.data if res.data else []
     
-    with st.form("form_tambah_minyak_supabase"):
-        col_a, col_b = st.columns(2)
+    if not data_produk:
+        st.info("Belum ada produk di katalog.")
+    else:
+        cols = st.columns(3)
+        for idx, item in enumerate(data_produk):
+            with cols[idx % 3]:
+                st.markdown(f"### {item.get('nama_id', 'Produk')}")
+                st.write(f"🏷️ Kategori: **{item.get('kategori', '-')}**")
+                st.write(f"💵 Harga: **${item.get('harga', 0)}** | Stok: {item.get('stok', '-')}")
+                with st.expander("Manfaat & Detail"):
+                    st.write(item.get("manfaat_id", "-"))
+
+# TAB 2 & 3: KHUSUS PENJUAL (SELLER)
+if user_role == "seller":
+    user_id = st.session_state["user"].id
+    verification = check_seller_verification(user_id)
+
+    # TAB VERIFIKASI USAHA
+    with tab_verifikasi:
+        st.subheader("🏢 Verifikasi Identitas Kantor & Legalitas Penjual")
         
-        with col_a:
-            nama_en_input = st.text_input(t["name_en_label"])
-            kategori_input = st.selectbox(t["category_input_label"], ["Essential Oil", "Spice Extract", "Carrier Oil", "Custom Blend"])
-            harga_input = st.number_input(t["price_label"], min_value=1.0, value=10.0, step=0.5)
-            manfaat_en_input = st.text_area(t["benefits_en_label"])
-            usage_en_input = st.text_area(t["usage_en_label"])
-            
-        with col_b:
-            nama_id_input = st.text_input(t["name_id_label"])
-            ukuran_input = st.text_input(t["size_label"], value="50ml")
-            stok_input = st.selectbox("Status:", ["In Stock", "Limited", "Out of Stock"])
-            manfaat_id_input = st.text_area(t["benefits_id_label"])
-            usage_id_input = st.text_area(t["usage_id_label"])
-            
-        submit_button = st.form_submit_button(t["save_btn"])
-        
-        if submit_button:
-            if nama_en_input and nama_id_input and manfaat_en_input and manfaat_id_input:
-                # Payload data untuk Supabase Table
-                new_product_payload = {
-                    "nama_en": nama_en_input,
-                    "nama_id": nama_id_input,
-                    "kategori": kategori_input,
-                    "harga": float(harga_input),
-                    "ukuran": ukuran_input,
-                    "stok": stok_input,
-                    "manfaat_en": manfaat_en_input,
-                    "manfaat_id": manfaat_id_input,
-                    "pemakaian_en": usage_en_input,
-                    "pemakaian_id": usage_id_input
-                }
+        if verification:
+            st.success(f"📌 Status Verifikasi Saat Ini: **{verification['status'].upper()}**")
+            st.json({
+                "Nama Perusahaan/Usaha": verification["company_name"],
+                "NPWP": verification["npwp"],
+                "Alamat Kantor": verification["office_address"],
+                "Nomor Izin Usaha (NIB/SIUP)": verification["business_license_no"]
+            })
+        else:
+            st.warning("⚠️ Akun Anda belum terverifikasi. Lengkapi formulir legalitas di bawah untuk dapat mengunggah produk.")
+            with st.form("form_verifikasi"):
+                comp_name = st.text_input("Nama Perusahaan / Perusahaan Perorangan")
+                npwp_no = st.text_input("Nomor NPWP Badan / Perorangan")
+                address = st.text_area("Alamat Lengkap Kantor / Tempat Usaha")
+                license_no = st.text_input("Nomor Izin Berusaha (NIB / SIUP)")
                 
-                # EXECUTE INSERT TO SUPABASE DATABASE
-                try:
-                    if supabase:
-                        supabase.table("katalog_minyak").insert(new_product_payload).execute()
-                        st.success(t["save_success"])
+                submit_verif = st.form_submit_button("Kirim Dokumen Verifikasi")
+                if submit_verif:
+                    if comp_name and npwp_no and address and license_no:
+                        supabase.table("seller_verifications").insert({
+                            "user_id": user_id,
+                            "company_name": comp_name,
+                            "npwp": npwp_no,
+                            "office_address": address,
+                            "business_license_no": license_no,
+                            "status": "verified"  # Otomatis verified untuk mode latihan
+                        }).execute()
+                        st.success("✅ Dokumen berhasil dikirim dan diverifikasi!")
                         st.rerun()
                     else:
-                        st.error("Database connection missing!")
-                except Exception as err:
-                    st.error(f"Failed to save to database: {err}")
-            else:
-                st.error(t["fill_all_error"])
+                        st.error("Mohon lengkapi semua kolom persyaratan.")
+
+    # TAB PANEL PENJUAL
+    with tab_seller:
+        st.subheader("➕ Tambah Produk Baru")
+        if not verification or verification.get("status") != "verified":
+            st.error("🔒 Fitur Tambah Produk terkunci. Anda harus menyelesaikan **Verifikasi Kantor Usaha** terlebih dahulu.")
+        else:
+            with st.form("form_tambah_produk"):
+                p_name_en = st.text_input("Nama Produk (English)")
+                p_name_id = st.text_input("Nama Produk (Indonesia)")
+                p_cat = st.selectbox("Kategori", ["Essential Oil", "Carrier Oil", "Spice Oil"])
+                p_price = st.number_input("Harga ($)", min_value=1.0, value=10.0)
+                p_size = st.text_input("Ukuran (misal: 50ml)")
+                p_stock = st.selectbox("Status Stok", ["In Stock", "Out of Stock"])
+                p_benefit_id = st.text_area("Manfaat Produk (Bahasa Indonesia)")
+                
+                btn_save = st.form_submit_button("💾 Simpan Produk ke Database")
+                if btn_save:
+                    payload = {
+                        "nama_en": p_name_en,
+                        "nama_id": p_name_id,
+                        "kategori": p_cat,
+                        "harga": p_price,
+                        "ukuran": p_size,
+                        "stok": p_stock,
+                        "manfaat_id": p_benefit_id
+                    }
+                    supabase.table("katalog_minyak").insert(payload).execute()
+                    st.success("✅ Produk berhasil ditambahkan oleh Penjual Terverifikasi!")
+                    st.rerun()
